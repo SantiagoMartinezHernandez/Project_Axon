@@ -1,0 +1,25 @@
+# --- General ---
+.DS_Store
+.env
+*.log
+
+# --- Python (Axon Core) ---
+axon_core/__pycache__/
+axon_core/venv/
+axon_core/*.egg-info/
+.pytest_cache/
+
+# --- Flutter (Axon Satellite) ---
+axon_satellite/.dart_tool/
+axon_satellite/.idea/
+axon_satellite/build/
+axon_satellite/ios/Pods/
+
+# --- C++ / PlatformIO (Axon Nerves) ---
+axon_nerves/.pio/
+axon_nerves/.vscode/
+
+# --- Secrets ---
+secrets.py
+keys.dart
+wifi_creds.h
