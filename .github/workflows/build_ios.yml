@@ -15,17 +15,22 @@ jobs:
         run: flutter pub get
         working-directory: ./axon_satellite
 
-      - name: Build IPA (Force Unsigned)
+      - name: Disable Code Signing (Surgical Strike)
         run: |
           cd axon_satellite
-          # The magic happens here: We pass flags to override signing requirements
-          flutter build ios --release --no-codesign -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          # Forcefully turn off signing in the Xcode project file
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DevelopmentTeam = .*/DevelopmentTeam = "";/g' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Build IPA
+        run: |
+          cd axon_satellite
+          # Now we build normally, but with the --no-codesign flag
+          flutter build ios --release --no-codesign
           
-          # Prepare the payload
           mkdir Payload
-          # Move the generated app into the payload
           mv build/ios/iphoneos/Runner.app Payload
-          # Zip it into an IPA
           zip -r Axon.ipa Payload
           
       - name: Upload IPA
