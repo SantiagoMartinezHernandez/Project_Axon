@@ -6,7 +6,7 @@ jobs:
   build-ios:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4  # <-- UPDATED to v4
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -16,7 +16,6 @@ jobs:
         working-directory: ./axon_satellite
 
       - name: Build IPA (No Code Sign)
-        # This builds a 'Payload' folder which we zip into an IPA
         run: |
           cd axon_satellite
           flutter build ios --release --no-codesign
@@ -25,7 +24,7 @@ jobs:
           zip -r Axon.ipa Payload
           
       - name: Upload IPA
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # <-- UPDATED to v4
         with:
           name: Axon-Release
           path: axon_satellite/Axon.ipa
