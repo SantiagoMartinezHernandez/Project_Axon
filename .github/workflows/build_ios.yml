@@ -22,12 +22,17 @@ jobs:
           # 3. Enter iOS folder for Setup
           cd ios
           
-          # --- PODFILE PATCH: Disable Signing for Dependencies ---
-          rm -f Podfile.lock
-          cat <<EOF >> Podfile
+          # --- PODFILE PATCH (PYTHON SURGERY) ---
+          # Instead of appending a duplicate hook, we inject code into the existing one.
+          python3 -c "
+          import sys
+          
+          # Read the existing Podfile
+          with open('Podfile', 'r') as f:
+              content = f.read()
 
-          post_install do |installer|
-            installer.pods_project.targets.each do |target|
+          # The code we want to inject to disable signing
+          injection = \"\"\"
               target.build_configurations.each do |config|
                 config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
                 config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
@@ -35,19 +40,31 @@ jobs:
                 config.build_settings['CODE_SIGN_IDENTITY'] = ''
                 config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
               end
-            end
-          end
-          EOF
+          \"\"\"
+
+          # We look for the standard Flutter line and append our injection right after it
+          # This keeps it inside the 'targets.each' loop automatically.
+          if 'flutter_additional_ios_build_settings(target)' in content:
+              new_content = content.replace(
+                  'flutter_additional_ios_build_settings(target)', 
+                  'flutter_additional_ios_build_settings(target)' + injection
+              )
+              with open('Podfile', 'w') as f:
+                  f.write(new_content)
+              print('✅ Podfile successfully patched with No-Sign logic.')
+          else:
+              print('❌ Could not find hook to patch!')
+              sys.exit(1)
+          "
           
           # --- PROJECT FILE PATCH A: Switch to Manual Provisioning ---
           sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' Runner.xcodeproj/project.pbxproj
           sed -i '' 's/DevelopmentTeam = .*/DevelopmentTeam = "";/g' Runner.xcodeproj/project.pbxproj
           
-          # --- PROJECT FILE PATCH B: Disable 'Thin Binary' (The Fix) ---
-          # We replace 'embed_and_thin' with 'embed' to skip the crashing signing step.
+          # --- PROJECT FILE PATCH B: Disable 'Thin Binary' ---
           sed -i '' 's/embed_and_thin/embed/g' Runner.xcodeproj/project.pbxproj
           
-          # Install Pods
+          # Install Pods (Now with the injected patch)
           pod install --repo-update
           
           # 4. BUILD COMMAND
