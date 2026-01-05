@@ -1,6 +1,6 @@
 # Project Axon: The Distributed Neural Interface
 
-**Axon** is a multimodal AI ecosystem designed to bridge the gap between biological signals and digital cognition. It functions as a distributed nervous system, leveraging Edge AI (TinyML), Mobile Computing (Flutter), and High-Performance Cloud/Local Inference (Gemini/V-JEPA).
+**Axon** is a multimodal AI ecosystem designed to bridge the gap between biological signals, digital cognition, and wearable devices integration. It functions as a distributed nervous system, leveraging Edge AI (TinyML), Mobile Computing (Flutter), and High-Performance Cloud/Local Inference (Gemini/V-JEPA).
 
 ## 🧠 The Architecture
 
@@ -16,7 +16,7 @@
 
 ### 3. The Nerves (Peripheral)
 * **Hardware:** Custom ART/Wear Hardware (ESP32-S3).
-* **Stack:** C++, PlatformIO, TinyML.
+* **Stack:** MicroPython, C++, PlatformIO, TinyML.
 * **Role:** Proprioception and haptic feedback. Calculates biological inferences at the edge.
 
 ## 🎯 Dual-Use Goals
