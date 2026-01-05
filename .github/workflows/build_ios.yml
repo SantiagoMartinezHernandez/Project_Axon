@@ -24,23 +24,17 @@ jobs:
           
           # --- STEP A: FORCE IOS 15.0 (UNIX METHOD) ---
           rm -f Podfile.lock
-          # Delete any existing platform line (commented or not) to avoid conflicts
           sed -i '' '/platform :ios/d' Podfile
-          # Prepend the correct line to the top of the file
           echo "platform :ios, '15.0'" > Podfile.tmp
           cat Podfile >> Podfile.tmp
           mv Podfile.tmp Podfile
           
-          # --- STEP B: INJECT NO-SIGN HOOK (PYTHON METHOD) ---
-          # We use Python to safely insert code inside the existing post_install block
+          # --- STEP B: INJECT NO-SIGN HOOK (PYTHON) ---
           python3 -c "
           import sys
+          print('--- PATCHING PODFILE ---')
+          with open('Podfile', 'r') as f: content = f.read()
           
-          print('--- INJECTING SIGNING PATCH ---')
-          with open('Podfile', 'r') as f:
-              content = f.read()
-
-          # The code to disable signing in all dependencies
           injection = \"\"\"
               target.build_configurations.each do |config|
                 config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
@@ -50,37 +44,56 @@ jobs:
                 config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
               end
           \"\"\"
-
+          
           if 'flutter_additional_ios_build_settings(target)' in content:
-              new_content = content.replace(
-                  'flutter_additional_ios_build_settings(target)', 
-                  'flutter_additional_ios_build_settings(target)' + injection
-              )
-              with open('Podfile', 'w') as f:
-                  f.write(new_content)
-              print('✅ Hook Injected Successfully')
+              content = content.replace('flutter_additional_ios_build_settings(target)', 'flutter_additional_ios_build_settings(target)' + injection)
+              with open('Podfile', 'w') as f: f.write(content)
+              print('✅ Podfile Hook Injected')
           else:
-              print('❌ CRITICAL: Could not find hook to patch!')
+              print('❌ CRITICAL: Podfile hook target not found!')
               sys.exit(1)
           "
           
-          # Debug: Print the top of the file to prove it's fixed
-          echo "--- FINAL PODFILE HEAD ---"
-          head -n 10 Podfile
+          # --- STEP C: DISABLE THIN BINARY (PYTHON SCALPEL) ---
+          # This is the new fix. We use Python to find and replace the crashing script command.
+          python3 -c "
+          import sys
+          print('--- PATCHING PROJECT FILE ---')
+          path = 'Runner.xcodeproj/project.pbxproj'
+          with open(path, 'r') as f: content = f.read()
           
-          # --- STEP C: PROJECT FILE REPAIRS ---
-          # 1. Switch to Manual Provisioning (Stops Team ID check)
-          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DevelopmentTeam = .*/DevelopmentTeam = "";/g' Runner.xcodeproj/project.pbxproj
+          # We search for the specific command that triggers the crash
+          target_string = 'xcode_backend.sh embed_and_thin'
+          replacement = 'xcode_backend.sh embed'
           
-          # 2. Disable "Thin Binary" Script (Stops the "PhaseScriptExecution" crash)
-          # We replace the signing script 'embed_and_thin' with the non-signing 'embed'
-          sed -i '' 's/embed_and_thin/embed/g' Runner.xcodeproj/project.pbxproj
+          if target_string in content:
+              content = content.replace(target_string, replacement)
+              with open(path, 'w') as f: f.write(content)
+              print(f'✅ Fixed: Replaced {target_string} with {replacement}')
+          else:
+              print(f'⚠️ WARNING: Could not find exact string \"{target_string}\". Trying partial match...')
+              if 'embed_and_thin' in content:
+                  content = content.replace('embed_and_thin', 'embed')
+                  with open(path, 'w') as f: f.write(content)
+                  print('✅ Fixed: Replaced partial match \"embed_and_thin\"')
+              else:
+                   print('❌ CRITICAL ERROR: Could not find \"embed_and_thin\" script in project file!')
+                   # We don't exit, because maybe it's already gone, but this gives us info.
           
+          # Also fix provisioning while we are here
+          content = content.replace('ProvisioningStyle = Automatic;', 'ProvisioningStyle = Manual;')
+          content = content.replace('DevelopmentTeam =', 'DevelopmentTeam = \"\"; //')
+          with open(path, 'w') as f: f.write(content)
+          print('✅ Fixed: Provisioning set to Manual')
+          "
+
           # --- STEP D: INSTALL & BUILD ---
           pod install --repo-update
           
-          # Use xcodebuild directly to bypass Flutter CLI checks
+          # Clean build folder to ensure our patch takes effect
+          xcodebuild clean -workspace Runner.xcworkspace -scheme Runner
+          
+          # Build
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
@@ -94,11 +107,7 @@ jobs:
         run: |
           cd axon_satellite
           mkdir Payload
-          
-          # Move the app from the custom build path
           mv build_xcode/Build/Products/Release-iphoneos/Runner.app Payload
-          
-          # Zip it into an IPA
           zip -r Axon.ipa Payload
 
       - name: Upload IPA
