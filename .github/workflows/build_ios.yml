@@ -11,57 +11,46 @@ jobs:
         with:
           channel: 'stable'
       
-      - name: Install Dependencies & Force iOS 15.0
+      - name: Configure & Build IPA
         run: |
-          # 1. Go into the Flutter Project Root FIRST
+          # 1. Enter the Project Folder (CRITICAL FIX)
           cd axon_satellite
           
-          # Now this works because we are in the right folder
+          # 2. Get Dependencies
           flutter pub get
           
-          # 2. Now go into the iOS folder for Podfile work
+          # 3. Enter iOS folder for Surgery
           cd ios
           
-          # Clean up
+          # --- SURGERY STEP A: Force iOS 15.0 (Podfile) ---
           rm -f Podfile.lock
-          
-          # Force iOS 15.0
           echo "platform :ios, '15.0'" > Podfile.new
           cat Podfile >> Podfile.new
           mv Podfile.new Podfile
           
-          # Verify
-          echo "--- MODIFIED PODFILE HEAD ---"
-          head -n 5 Podfile
+          # --- SURGERY STEP B: Force Manual Provisioning (Project File) ---
+          # We don't delete the line; we REPLACE 'Automatic' with 'Manual'
+          # This stops Flutter/Xcode from asking for a Team ID.
+          sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' Runner.xcodeproj/project.pbxproj
+          
+          # Also clear any lingering Team IDs just in case
+          sed -i '' 's/DevelopmentTeam = .*/DevelopmentTeam = "";/g' Runner.xcodeproj/project.pbxproj
           
           # Install Pods
           pod install --repo-update
-
-      - name: Build with xcodebuild (Bypass Flutter CLI)
-        run: |
-          # Go straight to the iOS folder where the workspace lives
-          cd axon_satellite/ios
           
-          # Build using xcodebuild directly
-          xcodebuild -workspace Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath "../build_xcode" \
-            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+          # 4. Go back to Flutter Root to Build
+          cd ..
+          
+          # 5. Build using the Standard Tool (now that config is fixed)
+          flutter build ios --release --no-codesign
 
       - name: Package IPA
         run: |
           cd axon_satellite
           mkdir Payload
-          
-          # Move the app from the custom build path
-          mv build_xcode/Build/Products/Release-iphoneos/Runner.app Payload
-          
-          # Zip it
+          # Flutter outputs the built app here:
+          mv build/ios/iphoneos/Runner.app Payload
           zip -r Axon.ipa Payload
 
       - name: Upload IPA
