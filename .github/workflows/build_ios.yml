@@ -11,18 +11,25 @@ jobs:
         with:
           channel: 'stable'
       
-      - name: Install Dependencies & Upgrade iOS Target
+      - name: Install Dependencies & Force iOS 15.0
         run: |
           flutter pub get
           cd axon_satellite/ios
           
-          # 1. Force the Podfile to target iOS 13.0 (Fixes dependency error)
-          # This command uncomments the platform line and sets it to 13.0
-          sed -i '' "s/# platform :ios, .*/platform :ios, '13.0'/g" Podfile
-          # Just in case it was already uncommented but low
-          sed -i '' "s/platform :ios, .*/platform :ios, '13.0'/g" Podfile
+          # 1. Clean up potential lockfile conflicts
+          rm -f Podfile.lock
           
-          # 2. Install the pods (libraries)
+          # 2. FORCE the Minimum Target to iOS 15.0 (Safe modern standard)
+          # We write a new header and append the old file to it.
+          echo "platform :ios, '15.0'" > Podfile.new
+          cat Podfile >> Podfile.new
+          mv Podfile.new Podfile
+          
+          # 3. Verify the change in logs
+          echo "--- MODIFIED PODFILE HEAD ---"
+          head -n 5 Podfile
+          
+          # 4. Install dependencies with the new target
           pod install --repo-update
 
       - name: Build with xcodebuild (Bypass Flutter CLI)
@@ -30,11 +37,13 @@ jobs:
           cd axon_satellite/ios
           
           # We call xcodebuild directly to ignore Flutter's "Team ID" checks
+          # We also pass IPHONEOS_DEPLOYMENT_TARGET=15.0 to align with the Podfile
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath "../build_xcode" \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
@@ -44,10 +53,10 @@ jobs:
           cd axon_satellite
           mkdir Payload
           
-          # Move the app from the custom build path we set above
+          # Move the compiled app to the Payload folder
           mv build_xcode/Build/Products/Release-iphoneos/Runner.app Payload
           
-          # Zip it up
+          # Zip it into an IPA file
           zip -r Axon.ipa Payload
 
       - name: Upload IPA
