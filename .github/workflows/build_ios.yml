@@ -39,18 +39,18 @@ jobs:
           end
           EOF
           
-          # --- PROJECT FILE PATCH: Switch to Manual Provisioning ---
-          # This prevents xcodebuild from looking for a Team ID
+          # --- PROJECT FILE PATCH A: Switch to Manual Provisioning ---
           sed -i '' 's/ProvisioningStyle = Automatic;/ProvisioningStyle = Manual;/g' Runner.xcodeproj/project.pbxproj
           sed -i '' 's/DevelopmentTeam = .*/DevelopmentTeam = "";/g' Runner.xcodeproj/project.pbxproj
+          
+          # --- PROJECT FILE PATCH B: Disable 'Thin Binary' (The Fix) ---
+          # We replace 'embed_and_thin' with 'embed' to skip the crashing signing step.
+          sed -i '' 's/embed_and_thin/embed/g' Runner.xcodeproj/project.pbxproj
           
           # Install Pods
           pod install --repo-update
           
-          # 4. BUILD COMMAND (The Critical Fix)
-          # We use xcodebuild directly to bypass Flutter's CLI checks.
-          # We pass CODE_SIGNING_ALLOWED=NO to skip the signing phase entirely.
-          
+          # 4. BUILD COMMAND
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
