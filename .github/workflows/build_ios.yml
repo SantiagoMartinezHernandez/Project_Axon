@@ -22,38 +22,56 @@ jobs:
           # 3. Enter iOS folder for Setup
           cd ios
           
-          # --- PODFILE PATCH (PYTHON SURGERY) ---
-          # Instead of appending a duplicate hook, we inject code into the existing one.
+          # --- PODFILE PATCH (PYTHON DOUBLE SURGERY) ---
           python3 -c "
           import sys
+          import re
           
-          # Read the existing Podfile
-          with open('Podfile', 'r') as f:
-              content = f.read()
+          print('--- STARTING PODFILE SURGERY ---')
+          
+          try:
+              with open('Podfile', 'r') as f:
+                  content = f.read()
+              
+              # OPERATION 1: Force Platform to iOS 15.0
+              # This Regex finds 'platform :ios' (even if commented with #) and replaces it.
+              platform_pattern = r'(#\s*)?platform :ios, .*'
+              replacement_platform = \"platform :ios, '15.0'\"
+              
+              if re.search(platform_pattern, content):
+                  content = re.sub(platform_pattern, replacement_platform, content)
+                  print('✅ Fixed: iOS Platform set to 15.0')
+              else:
+                  # If the line is missing entirely, prepend it
+                  content = replacement_platform + '\n' + content
+                  print('✅ Fixed: iOS Platform line prepended')
 
-          # The code we want to inject to disable signing
-          injection = \"\"\"
-              target.build_configurations.each do |config|
-                config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
-                config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
-                config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ''
-                config.build_settings['CODE_SIGN_IDENTITY'] = ''
-                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
-              end
-          \"\"\"
+              # OPERATION 2: Inject No-Sign Logic into post_install
+              injection = \"\"\"
+                  target.build_configurations.each do |config|
+                    config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+                    config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+                    config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ''
+                    config.build_settings['CODE_SIGN_IDENTITY'] = ''
+                    config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+                  end
+              \"\"\"
 
-          # We look for the standard Flutter line and append our injection right after it
-          # This keeps it inside the 'targets.each' loop automatically.
-          if 'flutter_additional_ios_build_settings(target)' in content:
-              new_content = content.replace(
-                  'flutter_additional_ios_build_settings(target)', 
-                  'flutter_additional_ios_build_settings(target)' + injection
-              )
+              if 'flutter_additional_ios_build_settings(target)' in content:
+                  content = content.replace(
+                      'flutter_additional_ios_build_settings(target)', 
+                      'flutter_additional_ios_build_settings(target)' + injection
+                  )
+                  print('✅ Fixed: No-Sign logic injected')
+              else:
+                  print('❌ WARNING: Could not find hook to patch!')
+                  # We don't exit here because the platform fix might be enough to get further
+              
               with open('Podfile', 'w') as f:
-                  f.write(new_content)
-              print('✅ Podfile successfully patched with No-Sign logic.')
-          else:
-              print('❌ Could not find hook to patch!')
+                  f.write(content)
+                  
+          except Exception as e:
+              print(f'❌ SCRIPT ERROR: {e}')
               sys.exit(1)
           "
           
@@ -64,7 +82,7 @@ jobs:
           # --- PROJECT FILE PATCH B: Disable 'Thin Binary' ---
           sed -i '' 's/embed_and_thin/embed/g' Runner.xcodeproj/project.pbxproj
           
-          # Install Pods (Now with the injected patch)
+          # Install Pods (Now with iOS 15.0 forced)
           pod install --repo-update
           
           # 4. BUILD COMMAND
