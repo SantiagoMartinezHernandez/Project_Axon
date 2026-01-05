@@ -13,31 +13,36 @@ jobs:
       
       - name: Install Dependencies & Force iOS 15.0
         run: |
-          flutter pub get
-          cd axon_satellite/ios
+          # 1. Go into the Flutter Project Root FIRST
+          cd axon_satellite
           
-          # 1. Clean up potential lockfile conflicts
+          # Now this works because we are in the right folder
+          flutter pub get
+          
+          # 2. Now go into the iOS folder for Podfile work
+          cd ios
+          
+          # Clean up
           rm -f Podfile.lock
           
-          # 2. FORCE the Minimum Target to iOS 15.0 (Safe modern standard)
-          # We write a new header and append the old file to it.
+          # Force iOS 15.0
           echo "platform :ios, '15.0'" > Podfile.new
           cat Podfile >> Podfile.new
           mv Podfile.new Podfile
           
-          # 3. Verify the change in logs
+          # Verify
           echo "--- MODIFIED PODFILE HEAD ---"
           head -n 5 Podfile
           
-          # 4. Install dependencies with the new target
+          # Install Pods
           pod install --repo-update
 
       - name: Build with xcodebuild (Bypass Flutter CLI)
         run: |
+          # Go straight to the iOS folder where the workspace lives
           cd axon_satellite/ios
           
-          # We call xcodebuild directly to ignore Flutter's "Team ID" checks
-          # We also pass IPHONEOS_DEPLOYMENT_TARGET=15.0 to align with the Podfile
+          # Build using xcodebuild directly
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
@@ -53,10 +58,10 @@ jobs:
           cd axon_satellite
           mkdir Payload
           
-          # Move the compiled app to the Payload folder
+          # Move the app from the custom build path
           mv build_xcode/Build/Products/Release-iphoneos/Runner.app Payload
           
-          # Zip it into an IPA file
+          # Zip it
           zip -r Axon.ipa Payload
 
       - name: Upload IPA
