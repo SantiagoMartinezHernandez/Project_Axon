@@ -15,18 +15,30 @@ jobs:
         run: flutter pub get
         working-directory: ./axon_satellite
 
-      - name: Disable Code Signing (Surgical Strike)
+      - name: Nuclear Option - Strip Signing Config
         run: |
-          cd axon_satellite
-          # Forcefully turn off signing in the Xcode project file
-          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' ios/Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DevelopmentTeam = .*/DevelopmentTeam = "";/g' ios/Runner.xcodeproj/project.pbxproj
+          cd axon_satellite/ios/Runner.xcodeproj
+          
+          # 1. Remove Team ID lines entirely
+          sed -i '' '/DevelopmentTeam/d' project.pbxproj
+          
+          # 2. Remove Provisioning Style (forces Manual)
+          sed -i '' '/ProvisioningStyle/d' project.pbxproj
+          
+          # 3. Force Code Signing Identity to empty
+          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "";/g' project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Distribution";/CODE_SIGN_IDENTITY = "";/g' project.pbxproj
+          
+          # 4. Force Signing Required to NO
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' project.pbxproj
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES;/CODE_SIGNING_ALLOWED = NO;/g' project.pbxproj
 
-      - name: Build IPA
+      - name: Build IPA (Force Unsigned)
         run: |
           cd axon_satellite
-          # Now we build normally, but with the --no-codesign flag
+          # Global override to tell xcodebuild to back off
+          export CODE_SIGNING_ALLOWED=NO
+          
           flutter build ios --release --no-codesign
           
           mkdir Payload
