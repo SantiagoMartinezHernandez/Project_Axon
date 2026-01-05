@@ -1,0 +1,31 @@
+name: Build iOS IPA
+on:
+  push:
+    branches: [ "main" ]
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      
+      - name: Install Dependencies
+        run: flutter pub get
+        working-directory: ./axon_satellite
+
+      - name: Build IPA (No Code Sign)
+        # This builds a 'Payload' folder which we zip into an IPA
+        run: |
+          cd axon_satellite
+          flutter build ios --release --no-codesign
+          mkdir Payload
+          mv build/ios/iphoneos/Runner.app Payload
+          zip -r Axon.ipa Payload
+          
+      - name: Upload IPA
+        uses: actions/upload-artifact@v3
+        with:
+          name: Axon-Release
+          path: axon_satellite/Axon.ipa

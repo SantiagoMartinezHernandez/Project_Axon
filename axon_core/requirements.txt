@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+google-genai
+python-dotenv
+websockets
+# optional: for local hardware later
+pyserial 
+fastapi
+uvicorn[standard]
+google-genai
+python-dotenv
+websockets
+
+# --- The Senses (Vision & Audio) ---
+opencv-python       # For V-JEPA and Camera handling
+pyaudio             # For Audio I/O
+numpy               # For tensor math (V-JEPA needs this)
+
+# --- Hardware Control ---
+pyserial            # To talk to the ESP32 (Nerves)
