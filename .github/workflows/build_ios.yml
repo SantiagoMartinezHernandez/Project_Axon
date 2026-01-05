@@ -54,43 +54,44 @@ jobs:
               sys.exit(1)
           "
           
-          # --- STEP C: DISABLE THIN BINARY (PYTHON SCALPEL) ---
-          # This is the new fix. We use Python to find and replace the crashing script command.
+          # --- STEP C: DISABLE THIN BINARY (AGGRESSIVE REGEX) ---
           python3 -c "
-          import sys
+          import sys, re, os
+          
           print('--- PATCHING PROJECT FILE ---')
           path = 'Runner.xcodeproj/project.pbxproj'
-          with open(path, 'r') as f: content = f.read()
           
-          # We search for the specific command that triggers the crash
-          target_string = 'xcode_backend.sh embed_and_thin'
-          replacement = 'xcode_backend.sh embed'
+          if not os.path.exists(path):
+              print(f'❌ ERROR: File not found at {path}')
+              sys.exit(1)
+              
+          with open(path, 'r', errors='ignore') as f: content = f.read()
           
-          if target_string in content:
-              content = content.replace(target_string, replacement)
-              with open(path, 'w') as f: f.write(content)
-              print(f'✅ Fixed: Replaced {target_string} with {replacement}')
+          # 1. Replace 'embed_and_thin' with 'embed' globally using Regex
+          # This catches it even if it's quoted like \"embed_and_thin\"
+          new_content, count = re.subn(r'embed_and_thin', 'embed', content)
+          
+          if count > 0:
+              print(f'✅ FIXED: Replaced {count} occurrences of embed_and_thin')
           else:
-              print(f'⚠️ WARNING: Could not find exact string \"{target_string}\". Trying partial match...')
-              if 'embed_and_thin' in content:
-                  content = content.replace('embed_and_thin', 'embed')
-                  with open(path, 'w') as f: f.write(content)
-                  print('✅ Fixed: Replaced partial match \"embed_and_thin\"')
+              print('⚠️ WARNING: No occurrences of embed_and_thin found. Check if already patched.')
+              # We verify if 'xcode_backend.sh embed' exists to be sure
+              if 'xcode_backend.sh embed' in content:
+                  print('✅ VERIFIED: Script is already set to embed.')
               else:
-                   print('❌ CRITICAL ERROR: Could not find \"embed_and_thin\" script in project file!')
-                   # We don't exit, because maybe it's already gone, but this gives us info.
+                  print('❌ ERROR: Could not find the Thin Binary script! Build may fail.')
           
-          # Also fix provisioning while we are here
-          content = content.replace('ProvisioningStyle = Automatic;', 'ProvisioningStyle = Manual;')
-          content = content.replace('DevelopmentTeam =', 'DevelopmentTeam = \"\"; //')
-          with open(path, 'w') as f: f.write(content)
-          print('✅ Fixed: Provisioning set to Manual')
+          # 2. Force Manual Provisioning (Regex for safety)
+          new_content = re.sub(r'ProvisioningStyle\s*=\s*Automatic;', 'ProvisioningStyle = Manual;', new_content)
+          new_content = re.sub(r'DevelopmentTeam\s*=\s*[^;]*;', 'DevelopmentTeam = \"\";', new_content)
+          
+          with open(path, 'w') as f: f.write(new_content)
+          print('✅ Project File Patching Complete')
           "
 
           # --- STEP D: INSTALL & BUILD ---
           pod install --repo-update
           
-          # Clean build folder to ensure our patch takes effect
           xcodebuild clean -workspace Runner.xcworkspace -scheme Runner
           
           # Build
