@@ -11,19 +11,25 @@ jobs:
         with:
           channel: 'stable'
       
-      - name: Install Dependencies
+      - name: Install Dependencies & Upgrade iOS Target
         run: |
           flutter pub get
-          cd ios
+          cd axon_satellite/ios
+          
+          # 1. Force the Podfile to target iOS 13.0 (Fixes dependency error)
+          # This command uncomments the platform line and sets it to 13.0
+          sed -i '' "s/# platform :ios, .*/platform :ios, '13.0'/g" Podfile
+          # Just in case it was already uncommented but low
+          sed -i '' "s/platform :ios, .*/platform :ios, '13.0'/g" Podfile
+          
+          # 2. Install the pods (libraries)
           pod install --repo-update
-        working-directory: ./axon_satellite
 
       - name: Build with xcodebuild (Bypass Flutter CLI)
         run: |
           cd axon_satellite/ios
           
           # We call xcodebuild directly to ignore Flutter's "Team ID" checks
-          # -derivedDataPath "../build_xcode" forces the output to a known folder
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
