@@ -22,14 +22,18 @@ jobs:
           # 3. Enter iOS folder for Setup
           cd ios
           
-          # --- STEP A: FORCE IOS 15.0 (UNIX METHOD) ---
+          # --- DIAGNOSTIC: Check if we are in the right place ---
+          echo "Current Directory: $(pwd)"
+          ls -R Runner.xcodeproj
+          
+          # --- STEP A: FORCE IOS 15.0 ---
           rm -f Podfile.lock
           sed -i '' '/platform :ios/d' Podfile
           echo "platform :ios, '15.0'" > Podfile.tmp
           cat Podfile >> Podfile.tmp
           mv Podfile.tmp Podfile
           
-          # --- STEP B: INJECT NO-SIGN HOOK (PYTHON) ---
+          # --- STEP B: INJECT NO-SIGN HOOK ---
           python3 -c "
           import sys
           print('--- PATCHING PODFILE ---')
@@ -54,47 +58,56 @@ jobs:
               sys.exit(1)
           "
           
-          # --- STEP C: DISABLE THIN BINARY (AGGRESSIVE REGEX) ---
+          # --- STEP C: NUCLEAR THIN BINARY PATCH ---
+          # This script finds the project file and FORCEFULLY changes the script command.
           python3 -c "
-          import sys, re, os
+          import sys, os, re
           
-          print('--- PATCHING PROJECT FILE ---')
           path = 'Runner.xcodeproj/project.pbxproj'
+          print(f'--- SEARCHING FOR PROJECT FILE AT: {path} ---')
           
           if not os.path.exists(path):
-              print(f'❌ ERROR: File not found at {path}')
+              print('❌ FILE NOT FOUND! Check your directory structure.')
               sys.exit(1)
               
           with open(path, 'r', errors='ignore') as f: content = f.read()
           
-          # 1. Replace 'embed_and_thin' with 'embed' globally using Regex
-          # This catches it even if it's quoted like \"embed_and_thin\"
-          new_content, count = re.subn(r'embed_and_thin', 'embed', content)
+          # Regex to find 'embed_and_thin' allowing for any whitespace or quotes around it
+          pattern = r'xcode_backend\.sh\\?\"? +embed_and_thin'
+          replacement = 'xcode_backend.sh embed'
           
-          if count > 0:
-              print(f'✅ FIXED: Replaced {count} occurrences of embed_and_thin')
+          # Check if it exists before replacing
+          if re.search(pattern, content):
+              new_content = re.sub(pattern, replacement, content)
+              with open(path, 'w') as f: f.write(new_content)
+              print('✅ SUCCESS: Replaced embed_and_thin with embed.')
           else:
-              print('⚠️ WARNING: No occurrences of embed_and_thin found. Check if already patched.')
-              # We verify if 'xcode_backend.sh embed' exists to be sure
-              if 'xcode_backend.sh embed' in content:
-                  print('✅ VERIFIED: Script is already set to embed.')
+              print('⚠️ WARNING: Exact match not found. Trying loose match...')
+              # Fallback: Just replace the string 'embed_and_thin' anywhere
+              if 'embed_and_thin' in content:
+                  content = content.replace('embed_and_thin', 'embed')
+                  with open(path, 'w') as f: f.write(content)
+                  print('✅ SUCCESS: Replaced loose embed_and_thin match.')
               else:
-                  print('❌ ERROR: Could not find the Thin Binary script! Build may fail.')
+                  print('❌ ERROR: Could not find any reference to embed_and_thin. The script might not be there?')
+                  # We print the first 500 chars to debug if needed
+                  # print(content[:500])
           
-          # 2. Force Manual Provisioning (Regex for safety)
-          new_content = re.sub(r'ProvisioningStyle\s*=\s*Automatic;', 'ProvisioningStyle = Manual;', new_content)
-          new_content = re.sub(r'DevelopmentTeam\s*=\s*[^;]*;', 'DevelopmentTeam = \"\";', new_content)
-          
-          with open(path, 'w') as f: f.write(new_content)
-          print('✅ Project File Patching Complete')
+          # Also Patch Provisioning
+          content = open(path, 'r', errors='ignore').read()
+          content = content.replace('ProvisioningStyle = Automatic;', 'ProvisioningStyle = Manual;')
+          content = content.replace('DevelopmentTeam =', 'DevelopmentTeam = \"\"; //')
+          with open(path, 'w') as f: f.write(content)
+          print('✅ Provisioning Patched')
           "
 
           # --- STEP D: INSTALL & BUILD ---
           pod install --repo-update
           
+          # Clean is essential here
           xcodebuild clean -workspace Runner.xcworkspace -scheme Runner
           
-          # Build
+          # Build using the 'Direct' method (JustFrederik style)
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
@@ -108,7 +121,9 @@ jobs:
         run: |
           cd axon_satellite
           mkdir Payload
+          # Move the compiled app into the Payload folder
           mv build_xcode/Build/Products/Release-iphoneos/Runner.app Payload
+          # Zip it up
           zip -r Axon.ipa Payload
 
       - name: Upload IPA
