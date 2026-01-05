@@ -119,7 +119,12 @@ class _SatelliteControlState extends State<SatelliteControl> {
                         size: 12,
                       )
                       .animate(target: _isConnected ? 1 : 0)
-                      .boxShadow(color: Colors.greenAccent, blurRadius: 10),
+                      .boxShadow(
+                        end: BoxShadow(
+                          color: Colors.greenAccent,
+                          blurRadius: 10,
+                        ),
+                      ),
                 ],
               ),
               const SizedBox(height: 10),
