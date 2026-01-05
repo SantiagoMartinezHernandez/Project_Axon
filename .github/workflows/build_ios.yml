@@ -6,7 +6,7 @@ jobs:
   build-ios:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4  # <-- UPDATED to v4
+      - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -15,16 +15,21 @@ jobs:
         run: flutter pub get
         working-directory: ./axon_satellite
 
-      - name: Build IPA (No Code Sign)
+      - name: Build IPA (Force Unsigned)
         run: |
           cd axon_satellite
-          flutter build ios --release --no-codesign
+          # The magic happens here: We pass flags to override signing requirements
+          flutter build ios --release --no-codesign -- CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          
+          # Prepare the payload
           mkdir Payload
+          # Move the generated app into the payload
           mv build/ios/iphoneos/Runner.app Payload
+          # Zip it into an IPA
           zip -r Axon.ipa Payload
           
       - name: Upload IPA
-        uses: actions/upload-artifact@v4  # <-- UPDATED to v4
+        uses: actions/upload-artifact@v4
         with:
           name: Axon-Release
           path: axon_satellite/Axon.ipa
